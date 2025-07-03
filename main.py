@@ -15,7 +15,6 @@ console = Console()
 
 @functools.lru_cache(maxsize=1)
 def get_snippets_path() -> Path:
-    """Get the path to the VSCode snippets directory."""
     if platform.system() == "Linux":
         return Path.home().joinpath(".config", "Code", "User", "snippets")
     elif platform.system() == "Darwin":  # macOS
@@ -33,8 +32,6 @@ def get_snippets_path() -> Path:
 
 
 class SnippetError(Exception):
-    """Custom exception for snippet processing errors."""
-
     pass
 
 
