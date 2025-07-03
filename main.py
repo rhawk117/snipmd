@@ -187,6 +187,20 @@ class SnippetProcessor:
         return "\n\n---\n".join(markdown_sections)
 
 
+def ls_snippets() -> list[str]:
+    """
+    List available snippets in the snippets directory.
+
+    Returns:
+        List of snippet file names without extension
+    """
+    snippets_path = get_snippets_path()
+    if not snippets_path.exists():
+        raise SnippetError(f"Snippets path does not exist: {snippets_path}")
+
+    return [f.stem for f in snippets_path.glob("*.json") if f.is_file()]
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Convert VSCode snippet files to Markdown format",
@@ -203,8 +217,16 @@ Examples:
         "-s",
         "--snippet",
         type=str,
-        required=True,
+        required=False,
         help="Target language for snippets",
+    )
+
+    parser.add_argument(
+        "-ls",
+        "--list",
+        action="store_true",
+        help="List available snippets in the snippets directory",
+        default=False,
     )
 
     parser.add_argument(
@@ -233,15 +255,6 @@ Examples:
 
     return parser
 
-
-def process_snippets(args: argparse.Namespace) -> str:
-    processor = SnippetProcessor(
-        snippet_name=args.snippet,
-        snippet_lang=args.language or None,
-    )
-    snippets = processor.load_snippet_file()
-    markdown_content = processor.write_markdown(snippets)
-
     return markdown_content
 
 
@@ -265,13 +278,28 @@ def main() -> int:
     )
     exit_code = 0
     try:
-        md_string = process_snippets(args)
+        processor = SnippetProcessor(
+            snippet_name=args.snippet,
+            snippet_lang=args.language or None,
+        )
+        if args.list:
+            console.print("[green]Available snippets:[/green]")
+            for snippet in ls_snippets():
+                console.print(f"- [blue]{snippet}[/blue]")
+
+        if not args.snippet:
+            return 0
+
+        snippets = processor.load_snippet_file()
+        markdown_content = processor.write_markdown(snippets)
+        if not markdown_content:
+            raise SnippetError("No valid snippets found in the file.")
 
         if args.print:
-            console.print(Markdown(md_string, justify="full"))
+            console.print(Markdown(markdown_content, justify="full"))
 
         if args.output:
-            exit_code = export_snippet_md(args.output, md_string)
+            exit_code = export_snippet_md(args.output, markdown_content)
 
     except SnippetError as e:
         console.print(f"[red bold]Error: {e}[/red bold]")
