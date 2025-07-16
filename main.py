@@ -12,6 +12,57 @@ from rich.markdown import Markdown
 
 console = Console()
 
+parser = argparse.ArgumentParser(
+    description="Convert VSCode snippet files to Markdown format",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog="""
+Examples:
+%(prog)s -f snippets.json -l python
+%(prog)s -s '{"test": {"prefix": "t", "body": ["test"]}}' -l javascript
+%(prog)s -f my-snippets.json --snippet-path ~/.vscode/snippets -l python
+    """,
+)
+# -s, --snippet
+parser.add_argument(
+    "-s",
+    "--snippet",
+    type=str,
+    required=False,
+    help="Target language for snippets",
+)
+# -ls, --list
+parser.add_argument(
+    "-ls",
+    "--list",
+    action="store_true",
+    help="List available snippets in the snippets directory",
+    default=False,
+)
+# -l, --language
+parser.add_argument(
+    "-l",
+    "--language",
+    type=str,
+    default="",
+    required=False,
+    help="Language identifier for Markdown code blocks (e.g., shellscript snippet for bash), defaults to snippet",
+)
+# -o, --output
+parser.add_argument(
+    "-o",
+    "--output",
+    type=Path,
+    help="Output file path (default: stdout)",
+    required=False,
+)
+# --print
+parser.add_argument(
+    "--print",
+    action="store_true",
+    help="Print the Markdown output to console instead of writing to a file",
+    default=False,
+)
+
 
 @functools.lru_cache(maxsize=1)
 def get_snippets_path() -> Path:
@@ -22,13 +73,9 @@ def get_snippets_path() -> Path:
             "Library", "Application Support", "Code", "User", "snippets"
         )
     elif platform.system() == "Windows":
-        return Path.home().joinpath(
-            "AppData", "Roaming", "Code", "User", "snippets"
-        )
+        return Path.home().joinpath("AppData", "Roaming", "Code", "User", "snippets")
     else:
-        raise RuntimeError(
-            "Unsupported operating system for VSCode snippets path."
-        )
+        raise RuntimeError("Unsupported operating system for VSCode snippets path.")
 
 
 class SnippetError(Exception):
@@ -60,9 +107,7 @@ class VSCodeSnippet:
     @classmethod
     def create(cls, name: str, snippet_data: dict[str, Any]) -> "VSCodeSnippet":
         if not isinstance(snippet_data, dict):
-            raise SnippetError(
-                f"Invalid snippet data for '{name}': expected object"
-            )
+            raise SnippetError(f"Invalid snippet data for '{name}': expected object")
 
         prefix = snippet_data.get("prefix", "")
         body = snippet_data.get("body", [])
@@ -85,66 +130,27 @@ class VSCodeSnippet:
 
 class SnippetProcessor:
     def __init__(self, *, snippet_name: str, snippet_lang: str | None) -> None:
-        """
-        Initialize SnippetProcessor with snippet name and language.
-
-        Args:
-            snippet_name: Name of the snippet
-            snippet_lang: Language identifier for the snippets
-        """
         self.snippet_name: str = snippet_name
         self.snippet_lang: str | None = snippet_lang
 
-    def parse_snippet_json(
-        self, json_data: dict[str, Any]
-    ) -> list[VSCodeSnippet]:
-        """
-        Parse JSON data into VSCodeSnippet objects.
-
-        Args:
-            json_data: Raw JSON data from snippet file
-
-        Returns:
-            list of VSCodeSnippet objects
-
-        Raises:
-            SnippetError: If JSON structure is invalid
-        """
+    def parse_snippet_json(self, json_data: dict[str, Any]) -> list[VSCodeSnippet]:
         snippets: list[VSCodeSnippet] = []
 
         if not isinstance(json_data, dict):
-            raise SnippetError(
-                "Invalid JSON structure: expected object at root level"
-            )
+            raise SnippetError("Invalid JSON structure: expected object at root level")
 
         for name, snippet_data in json_data.items():
             try:
                 snip = VSCodeSnippet.create(name, snippet_data)
                 snippets.append(snip)
             except KeyError as e:
-                raise SnippetError(
-                    f"Missing required field in snippet '{name}': {e}"
-                )
+                raise SnippetError(f"Missing required field in snippet '{name}': {e}")
 
         return snippets
 
     def load_snippet_file(self) -> list[VSCodeSnippet]:
-        """
-        Load snippets from a JSON file.
-
-        Args:
-            file_path: Path to the snippet file
-
-        Returns:
-            list of VSCodeSnippet objects
-
-        Raises:
-            SnippetError: If file cannot be read or parsed
-        """
         try:
-            path = get_snippets_path().joinpath(
-                f"{self.snippet_name.lower()}.json"
-            )
+            path = get_snippets_path().joinpath(f"{self.snippet_name.lower()}.json")
 
             if not path.exists():
                 raise SnippetError(f"Snippet file not found: {path}")
@@ -159,100 +165,27 @@ class SnippetProcessor:
             raise SnippetError(f"Error reading snippet file '{path}': {e}")
 
     def write_markdown(self, snippets: list[VSCodeSnippet]) -> str:
-        """
-        Generate a complete Markdown document from snippets.
-
-        Args:
-            snippets: list of VSCodeSnippet objects
-            language: Language for code blocks
-
-        Returns:
-            Complete Markdown document as string
-        """
         if not snippets:
-            return "# No Snippets Found\n\nThe provided input contains no valid snippets."
+            return (
+                "# No Snippets Found\n\nThe provided input contains no valid snippets."
+            )
 
         markdown_sections = []
 
         for snippet in snippets:
             markdown_sections.append(
-                snippet.to_markdown(
-                    language=self.snippet_lang or self.snippet_name
-                )
+                snippet.to_markdown(language=self.snippet_lang or self.snippet_name)
             )
 
         return "\n\n---\n".join(markdown_sections)
 
 
 def ls_snippets() -> list[str]:
-    """
-    List available snippets in the snippets directory.
-
-    Returns:
-        List of snippet file names without extension
-    """
     snippets_path = get_snippets_path()
     if not snippets_path.exists():
         raise SnippetError(f"Snippets path does not exist: {snippets_path}")
 
     return [f.stem for f in snippets_path.glob("*.json") if f.is_file()]
-
-
-def create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Convert VSCode snippet files to Markdown format",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s -f snippets.json -l python
-  %(prog)s -s '{"test": {"prefix": "t", "body": ["test"]}}' -l javascript
-  %(prog)s -f my-snippets.json --snippet-path ~/.vscode/snippets -l python
-        """,
-    )
-
-    parser.add_argument(
-        "-s",
-        "--snippet",
-        type=str,
-        required=False,
-        help="Target language for snippets",
-    )
-
-    parser.add_argument(
-        "-ls",
-        "--list",
-        action="store_true",
-        help="List available snippets in the snippets directory",
-        default=False,
-    )
-
-    parser.add_argument(
-        "-l",
-        "--language",
-        type=str,
-        default="",
-        required=False,
-        help="Language identifier for Markdown code blocks (e.g., shellscript snippet for bash), defaults to snippet",
-    )
-
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help="Output file path (default: stdout)",
-        required=False,
-    )
-
-    parser.add_argument(
-        "--print",
-        action="store_true",
-        help="Print the Markdown output to console instead of writing to a file",
-        default=False,
-    )
-
-    return parser
-
-    return markdown_content
 
 
 def export_snippet_md(dest: str, snippet_md: str) -> int:
@@ -268,11 +201,13 @@ def export_snippet_md(dest: str, snippet_md: str) -> int:
 
 
 def main() -> int:
-    parser = create_parser()
     args = parser.parse_args()
-    assert get_snippets_path().exists(), (
-        "Snippet path does not exist. Please check the path or hard code the path to your snippets directory."
-    )
+    if not get_snippets_path().exists():
+        console.print(
+            "[red bold]Error:[/red bold] Snippets directory does not exist. "
+            "Please ensure VSCode is installed and snippets are available."
+        )
+        return 1
     exit_code = 0
     try:
         processor = SnippetProcessor(
