@@ -80,33 +80,6 @@ The tool converts VSCode snippet JSON files into well-structured Markdown docume
 - **Description** (if available)
 - **Code template** with proper syntax highlighting
 
-### Example Output
-
-```markdown
-### Class method
-**Prefix**: clsdef
-n/a
-
-#### Template
-
-```python
-@classmethod
-def ${1:method_name}(cls, ${2:args}):
-    ...
-```
-
----
-### Function
-**Prefix**: def
-n/a
-
-#### Template
-
-```python
-def ${1:function_name}(${2:args}) -> None:
-    ...
-```
-```
 
 ## VSCode Snippets Location
 
